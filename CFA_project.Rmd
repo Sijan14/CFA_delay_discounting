@@ -135,8 +135,5 @@ data.frame(lapply(test_df, function(x) x* 2))
 # row-wise operations
 apply(test_df, 1, function(x) sum(x)) 
 data.frame(sapply(test_df, function(x) x* 2))
-
-
-
 ```
 
