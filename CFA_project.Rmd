@@ -259,7 +259,7 @@ ff_model <- 'defer_small =~ def1 + def3 + def6
 
 ff_model_fit <- cfa(ff_model, data = cfa_df)
 
-summary(ff_model_fit, fit.measures = TRUE, rsq = TRUE)
+summary(ff_model_fit, fit.measures = TRUE, rsq = TRUE, standardized = TRUE)
 
 "Chi-square <- significant [not a good fit]
 CFI = 0.957 <- Good fit
@@ -267,5 +267,15 @@ RMSEA = 0.109 <- not a good fit"
 ```
 
 Lavaan likelihood ratio tests can then be performed to compare model fits of these nested models (as well as inspection of other global and local fit indices).
+```{r}
+# Comparing model one-factor & two-factor model
+lavTestLRT(of_model_fit, tf_model_fit)
+
+# Comparing model one-factor & four-factor model
+lavTestLRT(of_model_fit, ff_model_fit)
+
+# Comparing model two-factor & four-factor model
+lavTestLRT(tf_model_fit, ff_model_fit)
+```
 
 
