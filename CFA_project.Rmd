@@ -52,6 +52,7 @@ print(unlist(na_count(df)))
 # All 500 data points have complete data on the discounting tasks
 ```
 
+
 ```{r}
 class(df$defer1) # interestingly the discounting items are character types when they should be numeric
 
@@ -93,19 +94,27 @@ for (var in df %>% select(-ResponseId) %>% names()){
 }
 
 print(unlist(text_NAs))
-
+```
+```{r}
 # Character to Numeric
 new_df <- data.frame(lapply(df[, -which(names(df) == "ResponseId")], as.numeric))
 new_df <- new_df %>% 
   add_column(df$ResponseId, .before = 1) %>% 
   rename(ResponseId = `df$ResponseId`)
+
+# Checks off, it worked
+new_df[unlist(text_NAs),]
+
+# converting 0 and empty cells to NA
+new_df <- new_df %>% 
+  mutate(across(starts_with("expedite"), ~ if_else(. == 0 | . == "", NA, .)))
+
+df <- new_df
 ```
 
 ## Converting Responses to Discount Rates
 
 ```{r}
-df <- new_df
-
 df <- df %>% 
   mutate(dr_defer1 = (log(defer1 / 40)) / (1/12),
          dr_defer2 = (log(defer2 / 1500)) / (12/12),
@@ -125,7 +134,7 @@ df <- df %>%
 
 ### Remove this code section
 ```{r, eval=FALSE}
-str_which(df$defer3, "^\\$")
+"""str_which(df$defer3, "^\\$")
 test_df <- data.frame(a = 1:3, b = 4:6)
 test_df
 
@@ -136,15 +145,12 @@ data.frame(lapply(test_df, function(x) x* 2))
 # row-wise operations
 apply(test_df, 1, function(x) sum(x)) 
 data.frame(sapply(test_df, function(x) x* 2))
+"""
 ```
 
 ##Outlier Detection
 
 ```{r}
-# removing infinite discounting rates
-df <- df %>% 
-  filter(across(starts_with("dr"), is.finite))
-
 # converting discount rate into z-scores
 n <-  1
 for (var in colnames(df)[grepl("^dr", colnames(df))]){
@@ -194,5 +200,72 @@ outlier_graph <- function(data, var){
 }
 
 outlier_graph(cfa_df, "dr_defer1")
-
 ```
+## CFA Models
+
+Once the discount rate columns have been created and cleaned they can be supplied to CFA models in lavaan. Three that are of interest are:
+
+(1) A one-factor model with all 12 discount rate columns loading onto a single factor.
+
+### One Factor Model
+```{r}
+# renaming the variables for easier process
+rename_custom <- function(name) {
+  name <- sub("^dr_defer(\\d+)$", "def\\1", name)  
+  name <- sub("^dr_expedite(\\d+)$", "exp\\1", name)
+  return(name)
+}
+
+cfa_df <- cfa_df %>% 
+  rename_with(rename_custom)
+```
+
+```{r}
+# model specification
+of_model <- 'discount =~ def1 + def2 + def3 + def4 + def5 + def6 +
+                         exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
+
+# fitting the model
+of_model_fit <- cfa(of_model, data = cfa_df)
+
+summary(of_model_fit, fit.measures = TRUE, rsq = TRUE)
+
+"Chi-square <- significant [not a good fit]
+CFI = 0.724 <- not a good fit
+RMSEA = 0.260 <- not a good fit"
+```
+### Two Factor Model
+
+```{r}
+tf_model <- 'defer =~ def1 + def2 + def3 + def4 + def5 + def6
+          expedite =~ exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
+
+tf_model_fit <- cfa(tf_model, data = cfa_df)
+summary(tf_model_fit, rsq = TRUE, fit.measures = TRUE)
+
+"Chi-square <- significant [not a good fit]
+CFI = 0.935 <- Almost a good fit
+RMSEA = 0.127 <- not a good fit"
+```
+
+### Four Factor Model
+(3) For both defer and expedited items, three of the provided rewards were small in magnitude (< $100) and three were larger in magnitude (>$800). A four-factor model could look at defer_small, defer_large, expedite_small, and expedite_large.
+
+```{r}
+ff_model <- 'defer_small =~ def1 + def3 + def6
+             defer_large =~ def2 + def4 + def5
+             expedite_small =~ exp1 + exp3 + exp6
+             expedite_large =~ exp2 + exp4 + exp5'
+
+ff_model_fit <- cfa(ff_model, data = cfa_df)
+
+summary(ff_model_fit, fit.measures = TRUE, rsq = TRUE)
+
+"Chi-square <- significant [not a good fit]
+CFI = 0.957 <- Good fit
+RMSEA = 0.109 <- not a good fit"
+```
+
+Lavaan likelihood ratio tests can then be performed to compare model fits of these nested models (as well as inspection of other global and local fit indices).
+
+
