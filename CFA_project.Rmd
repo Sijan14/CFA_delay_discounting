@@ -15,8 +15,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(psych)
 library(lavaan)
-library(semTools)
-library(GPArotation)
 library(haven)
 library(stringr)
 ```
@@ -222,17 +220,18 @@ cfa_df <- cfa_df %>%
 
 ```{r}
 # model specification
+sum(is.na(cfa_df))
 of_model <- 'discount =~ def1 + def2 + def3 + def4 + def5 + def6 +
                          exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
 
 # fitting the model
-of_model_fit <- cfa(of_model, data = cfa_df)
+of_model_fit <- cfa(of_model, data = cfa_df, missing = "fiml")
 
 summary(of_model_fit, fit.measures = TRUE, rsq = TRUE)
 
 "Chi-square <- significant [not a good fit]
 CFI = 0.724 <- not a good fit
-RMSEA = 0.260 <- not a good fit"
+RMSEA = 0.239 <- not a good fit"
 ```
 ### Two Factor Model
 
