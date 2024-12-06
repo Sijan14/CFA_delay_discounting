@@ -47,7 +47,8 @@ na_count <- function(df){
 
 print(unlist(na_count(df)))
 
-# All 500 data points have complete data on the discounting tasks
+# All 500 data points have complete data on the discounting tasks.
+# But actually there are many missing data, they are just not referred as NAs
 ```
 
 
@@ -108,6 +109,21 @@ new_df <- new_df %>%
   mutate(across(starts_with("expedite"), ~ if_else(. == 0 | . == "", NA, .)))
 
 df <- new_df
+```
+```{r}
+sum(is.na(df)) # 27 NAs
+
+complete <- function(data) {
+  # Exclude the "ResponseId" column
+  subset_data <- data[, -which(names(data) == "ResponseId")]
+  
+  # Check each row for NAs and return 1 if complete, 0 otherwise
+  complete_rows <- apply(subset_data, 1, function(row) all(!is.na(row)))
+  
+  return(as.integer(complete_rows))
+}
+
+df$Complete <- complete(df)
 ```
 
 ## Converting Responses to Discount Rates
@@ -219,8 +235,10 @@ cfa_df <- cfa_df %>%
 ```
 
 ```{r}
+# missing data?
+sum(is.na(cfa_df)) # 593 NAs
+
 # model specification
-sum(is.na(cfa_df))
 of_model <- 'discount =~ def1 + def2 + def3 + def4 + def5 + def6 +
                          exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
 
