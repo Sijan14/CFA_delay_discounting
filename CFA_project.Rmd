@@ -25,13 +25,12 @@ library(stringr)
 df <- read_sav("discounting_data.sav")
 
 # Any incomplete data
-df %>% 
-  group_by(Finished) %>% 
-  count()
+table(df$Finished)
 
 # only relevant variable
 df <- df %>% 
-  select(c("ResponseId", starts_with("defer"), starts_with("expedite")))
+  select(c("ResponseId", starts_with("defer"), starts_with("expedite"), 
+           "Age_1", "Race", "Gender"))
 
 # 3 incomplete rows but did they complete the discounting task?
 na_count <- function(df){
@@ -46,14 +45,11 @@ na_count <- function(df){
 }
 
 print(unlist(na_count(df)))
-
-# All 500 data points have complete data on the discounting tasks.
-# But actually there are many missing data, they are just not referred as NAs
 ```
-
+All 500 data points appear to have complete data for the discounting tasks; however, many values are effectively missing, but they are not labeled as NAs.
 
 ```{r}
-class(df$defer1) # interestingly the discounting items are character types when they should be numeric
+class(df$defer1) # the discounting items are character types when they should be numeric
 
 # identifying the participants that used `$` sign
 set_dolla_sign <- list()
@@ -65,7 +61,7 @@ for (var in names(df)){
   }
 }
 
-print(unlist(set_dolla_sign))
+paste0("List of participants that used $ before their input ", paste(unlist(set_dolla_sign), collapse = ", "))
 ```
 ```{r}
 # removing the $ sign from individual responses
@@ -92,7 +88,7 @@ for (var in df %>% select(-ResponseId) %>% names()){
   }
 }
 
-print(unlist(text_NAs))
+paste0("List of participants that had texts in their responses ", paste(unlist(text_NAs), collapse = ", "))
 ```
 ```{r}
 # Character to Numeric
@@ -110,6 +106,7 @@ new_df <- new_df %>%
 
 df <- new_df
 ```
+## Are the missing data random or not?
 ```{r}
 sum(is.na(df)) # 27 NAs
 
@@ -124,6 +121,26 @@ complete <- function(data) {
 }
 
 df$Complete <- complete(df)
+
+## differs based on Gender
+table_gender <- table(df$Gender, df$Complete)
+chisq.test(table_gender) # highly significant -> NAR
+
+## differs based on Race
+table_race <- table(df$Race, df$Complete)
+chisq.test(table_race) # highly significant -> NAR
+
+## differs based on age
+t_test <- t.test(df$Age_1 ~ df$Complete)
+t_test # highly significant -> NAR
+
+"""
+new_df %>% 
+  group_by(Complete) %>% 
+  summarise(M = mean(AGE, na.rm = T), SD = sd(AGE, na.rm = T))
+
+cohensD(Age_1 ~ Complete, data = df)
+"""
 ```
 
 ## Converting Responses to Discount Rates
