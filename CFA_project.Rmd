@@ -63,6 +63,7 @@ for (var in names(df)){
 
 paste0("List of participants that used $ before their input ", paste(unlist(set_dolla_sign), collapse = ", "))
 ```
+
 ```{r}
 # removing the $ sign from individual responses
 df <- data.frame(lapply(df, function(x) str_remove(x, "^\\$")))
@@ -90,6 +91,7 @@ for (var in df %>% select(-ResponseId) %>% names()){
 
 paste0("List of participants that had texts in their responses ", paste(unlist(text_NAs), collapse = ", "))
 ```
+
 ```{r}
 # Character to Numeric
 new_df <- data.frame(lapply(df[, -which(names(df) == "ResponseId")], as.numeric))
@@ -122,6 +124,8 @@ complete <- function(data) {
 
 df$Complete <- complete(df)
 
+table(df$Complete)
+
 ## differs based on Gender
 table_gender <- table(df$Gender, df$Complete)
 chisq.test(table_gender) # highly significant -> NAR
@@ -134,13 +138,10 @@ chisq.test(table_race) # highly significant -> NAR
 t_test <- t.test(df$Age_1 ~ df$Complete)
 t_test # highly significant -> NAR
 
-"""
-new_df %>% 
-  group_by(Complete) %>% 
-  summarise(M = mean(AGE, na.rm = T), SD = sd(AGE, na.rm = T))
 
-cohensD(Age_1 ~ Complete, data = df)
-"""
+df %>% 
+  group_by(Complete) %>% 
+  summarise(M = mean(Age_1, na.rm = T), SD = sd(Age_1, na.rm = T))
 ```
 
 ## Converting Responses to Discount Rates
@@ -232,6 +233,13 @@ outlier_graph <- function(data, var){
 
 outlier_graph(cfa_df, "dr_defer1")
 ```
+
+## Assumptions check
+```{r}
+# Checking for multicollinearity 
+lowerCor(df[,2:13], use = "complete.obs", show = TRUE) # few instances of multicollinearity involving items (expd3, expd4, exp6)
+
+```
 ## CFA Models
 
 Once the discount rate columns have been created and cleaned they can be supplied to CFA models in lavaan. Three that are of interest are:
@@ -268,6 +276,26 @@ summary(of_model_fit, fit.measures = TRUE, rsq = TRUE)
 CFI = 0.724 <- not a good fit
 RMSEA = 0.239 <- not a good fit"
 ```
+```{r}
+# checking linearity assumptions for one factor model
+of_fs <- data.frame(lavPredict(of_model_fit, method = "regression"))
+nrow(of_fs)
+
+# Combine the data into one data frame
+plot_data <- cfa_df %>%
+  select(def1:def6, exp1:exp6) %>%  # Select the relevant columns
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>% 
+  mutate(Discount = rep(of_fs$discount, each = 12))
+
+# Create the plot using ggplot2
+ggplot(plot_data, aes(x = Discount, y = Value)) +
+  geom_point(size = 0.5, color = "blue", alpha = 0.5) +  # Add scatter points
+  facet_wrap(~Variable, scales = "free_y") +  # Create one plot for each variable
+  labs(x = "Discount", y = "Value", title = "Facet Wrap of Discount vs Variables") +
+  theme_minimal()
+```
+
+
 ### Two Factor Model
 
 ```{r}
