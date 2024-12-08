@@ -17,6 +17,7 @@ library(psych)
 library(lavaan)
 library(haven)
 library(stringr)
+library(semTools)
 ```
 
 ## Data Cleaning
@@ -237,7 +238,19 @@ outlier_graph(cfa_df, "dr_defer1")
 ## Assumptions check
 ```{r}
 # Checking for multicollinearity 
-lowerCor(df[,2:13], use = "complete.obs", show = TRUE) # few instances of multicollinearity involving items (expd3, expd4, exp6)
+lowerCor(df[,2:13], use = "complete.obs", show = TRUE) 
+
+# few instances of multicollinearity involving items (expd3, expd4, exp6)
+library(apaTables)
+
+cor_matrix <- cor(df[ ,2:13], use = "pairwise.complete.obs")
+
+apa.cor.table(
+  cor_matrix,
+  filename = "cor_table.doc",
+  table.number = 1,
+  show.conf.interval = FALSE
+)
 
 ```
 ## CFA Models
@@ -270,16 +283,18 @@ of_model <- 'discount =~ def1 + def2 + def3 + def4 + def5 + def6 +
 # fitting the model
 of_model_fit <- cfa(of_model, data = cfa_df, missing = "fiml")
 
-summary(of_model_fit, fit.measures = TRUE, rsq = TRUE)
+summary(of_model_fit, fit.measures = TRUE, rsq = TRUE, standardized = TRUE)
 
-"Chi-square <- significant [not a good fit]
-CFI = 0.724 <- not a good fit
-RMSEA = 0.239 <- not a good fit"
+reliability(of_model_fit)
+```
+```{r}
+# Plot for the one factor model
+semPlot::semPaths(of_model_fit, 
+                  layout = "tree", style = "lisrel", what = "col", whatLabels = "stand")
 ```
 ```{r}
 # checking linearity assumptions for one factor model
 of_fs <- data.frame(lavPredict(of_model_fit, method = "regression"))
-nrow(of_fs)
 
 # Combine the data into one data frame
 plot_data <- cfa_df %>%
@@ -302,12 +317,18 @@ ggplot(plot_data, aes(x = Discount, y = Value)) +
 tf_model <- 'defer =~ def1 + def2 + def3 + def4 + def5 + def6
           expedite =~ exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
 
-tf_model_fit <- cfa(tf_model, data = cfa_df)
-summary(tf_model_fit, rsq = TRUE, fit.measures = TRUE)
+tf_model_fit <- cfa(tf_model, data = cfa_df, missing = "fiml")
+summary(tf_model_fit, rsq = TRUE, fit.measures = TRUE, standardized = TRUE)
 
+semTools::reliability(tf_model_fit)
 "Chi-square <- significant [not a good fit]
 CFI = 0.935 <- Almost a good fit
 RMSEA = 0.127 <- not a good fit"
+```
+```{r}
+# Plot for the two factor model
+semPlot::semPaths(tf_model_fit, 
+                  layout = "tree", style = "lisrel", what = "col", whatLabels = "stand")
 ```
 
 ### Four Factor Model
@@ -319,13 +340,19 @@ ff_model <- 'defer_small =~ def1 + def3 + def6
              expedite_small =~ exp1 + exp3 + exp6
              expedite_large =~ exp2 + exp4 + exp5'
 
-ff_model_fit <- cfa(ff_model, data = cfa_df)
+ff_model_fit <- cfa(ff_model, data = cfa_df, missing = "fiml")
 
 summary(ff_model_fit, fit.measures = TRUE, rsq = TRUE, standardized = TRUE)
 
+semTools::reliability(ff_model_fit)
 "Chi-square <- significant [not a good fit]
 CFI = 0.957 <- Good fit
 RMSEA = 0.109 <- not a good fit"
+```
+```{r}
+# Plot for the four factor model
+semPlot::semPaths(ff_model_fit, 
+                  layout = "tree", style = "lisrel", what = "col", whatLabels = "stand")
 ```
 
 Lavaan likelihood ratio tests can then be performed to compare model fits of these nested models (as well as inspection of other global and local fit indices).
