@@ -1,8 +1,17 @@
 ---
-title: "CFA_project"
+title: "CFA Project"
 author: "Allama Ikbal Sijan"
 date: "2024-11-30"
-output: html_document
+site: bookdown::bookdown_site
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_depth: 4
+    theme: united
+    number_sections: false
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -18,22 +27,25 @@ library(lavaan)
 library(haven)
 library(stringr)
 library(semTools)
+library(apaTables)
+library(bookdown)
 ```
 
 ## Data Cleaning
 
 ```{r loading data, warning=FALSE}
+# Loading dataset
 df <- read_sav("discounting_data.sav")
 
-# Any incomplete data
+# Checking for incomplete data
 table(df$Finished)
 
-# only relevant variable
+# Keeping only relevant variable
 df <- df %>% 
   select(c("ResponseId", starts_with("defer"), starts_with("expedite"), 
            "Age_1", "Race", "Gender"))
 
-# 3 incomplete rows but did they complete the discounting task?
+# Checking whether the three unfinished datapoints have discounting task completed
 na_count <- function(df){
   na_dict <- list()
   
@@ -44,13 +56,18 @@ na_count <- function(df){
     
   return(na_dict)
 }
-
 print(unlist(na_count(df)))
 ```
 All 500 data points appear to have complete data for the discounting tasks; however, many values are effectively missing, but they are not labeled as NAs.
 
-```{r}
-class(df$defer1) # the discounting items are character types when they should be numeric
+```{r, echo=FALSE, eval=FALSE}
+# Saving the dataset
+write.csv(df, "discounting_data.csv", row.names = F)
+```
+
+```{r, warning=FALSE}
+# Checking datatype of discounting items
+class(df$defer1) # the discounting items should be numeric
 
 # identifying the participants that used `$` sign
 set_dolla_sign <- list()
@@ -66,21 +83,21 @@ paste0("List of participants that used $ before their input ", paste(unlist(set_
 ```
 
 ```{r}
-# removing the $ sign from individual responses
+# Removing the $ sign from individual responses
 df <- data.frame(lapply(df, function(x) str_remove(x, "^\\$")))
 
-# checking if the function worked
-str_which(df$defer1, "^\\$")
+# Uncomment to check if the function worked
+# str_which(df$defer1, "^\\$")
 
-# removing the (,) from individual responses as that coerces the value to be NA
+# removing the `,` from individual responses as that coerces the value to be NA
 df <- data.frame(lapply(df, function(x) str_remove_all(x, ",")))
 
-# also noticed some instances of (.) at the end of the data which coerces into NAs, thus removing those as well
+# Removing `.` at the end of the data as that coerces the value to be NA
 df <- data.frame(lapply(df, function(x) str_remove(x, "\\.+$")))
 ```
 
-```{r, warning=FALSE}
-# detecting index of text responses (that will be converted to NAs)
+```{r}
+# Detecting index of text responses (that will be converted to NAs)
 text_NAs <- list()
 
 for (var in df %>% select(-ResponseId) %>% names()){
@@ -93,49 +110,58 @@ for (var in df %>% select(-ResponseId) %>% names()){
 paste0("List of participants that had texts in their responses ", paste(unlist(text_NAs), collapse = ", "))
 ```
 
-```{r}
-# Character to Numeric
+```{r, warning=FALSE}
+# Converting discount item responses (character to numeric)
 new_df <- data.frame(lapply(df[, -which(names(df) == "ResponseId")], as.numeric))
 new_df <- new_df %>% 
   add_column(df$ResponseId, .before = 1) %>% 
   rename(ResponseId = `df$ResponseId`)
 
-# Checks off, it worked
-new_df[unlist(text_NAs),]
-
-# converting 0 and empty cells to NA
+# Converting 0 and empty cells to NA
 new_df <- new_df %>% 
   mutate(across(starts_with("expedite"), ~ if_else(. == 0 | . == "", NA, .)))
 
 df <- new_df
 ```
-## Are the missing data random or not?
+
+## Descriptive Statistics
 ```{r}
+# Continuous variables
+describe(df[ , -c(1, 15, 16)])
+
+# Categorical variables
+table(df$Gender) # Male = 24%, Female = 73%
+table(df$Race) # White = 51%, Black = 17%
+```
+
+## Missing Data Analysis
+```{r}
+# Total missing cells
 sum(is.na(df)) # 27 NAs
 
+# Function for complete vs. incomplete data
 complete <- function(data) {
-  # Exclude the "ResponseId" column
+
   subset_data <- data[, -which(names(data) == "ResponseId")]
-  
-  # Check each row for NAs and return 1 if complete, 0 otherwise
   complete_rows <- apply(subset_data, 1, function(row) all(!is.na(row)))
   
   return(as.integer(complete_rows))
 }
 
+# Applying the function to the dataset
 df$Complete <- complete(df)
 
 table(df$Complete)
 
-## differs based on Gender
+## Gender differences between complete vs incomplete cases?
 table_gender <- table(df$Gender, df$Complete)
-chisq.test(table_gender) # highly significant -> NAR
+chisq.test(table_gender, simulate.p.value = TRUE, B = 2000)
 
-## differs based on Race
+## Racial differences between complete vs incomplete cases?
 table_race <- table(df$Race, df$Complete)
-chisq.test(table_race) # highly significant -> NAR
+chisq.test(table_race, simulate.p.value = TRUE, B = 2000)
 
-## differs based on age
+## Age differences between complete vs incomplete cases?
 t_test <- t.test(df$Age_1 ~ df$Complete)
 t_test # highly significant -> NAR
 
@@ -145,9 +171,9 @@ df %>%
   summarise(M = mean(Age_1, na.rm = T), SD = sd(Age_1, na.rm = T))
 ```
 
-## Converting Responses to Discount Rates
-
+## Data Transformation
 ```{r}
+# Converting Responses to Discount Rates
 df <- df %>% 
   mutate(dr_defer1 = (log(defer1 / 40)) / (1/12),
          dr_defer2 = (log(defer2 / 1500)) / (12/12),
@@ -165,26 +191,10 @@ df <- df %>%
 
 ```
 
-### Remove this code section
-```{r, eval=FALSE}
-"""str_which(df$defer3, "^\\$")
-test_df <- data.frame(a = 1:3, b = 4:6)
-test_df
-
-# Apply to each value in each column
-new_df <- data.frame(apply(test_df, 2, function(x) x * 2)) 
-data.frame(lapply(test_df, function(x) x* 2))
-
-# row-wise operations
-apply(test_df, 1, function(x) sum(x)) 
-data.frame(sapply(test_df, function(x) x* 2))
-"""
-```
-
-##Outlier Detection
+## Outlier Detection
 
 ```{r}
-# converting discount rate into z-scores
+# Converting discount rate into z-scores
 n <-  1
 for (var in colnames(df)[grepl("^dr", colnames(df))]){
   new_var <- paste0("z_score", n)
@@ -192,7 +202,7 @@ for (var in colnames(df)[grepl("^dr", colnames(df))]){
   n <-  n + 1
 }
 
-# converting participants data with extreme z-values to NAs 
+# Converting participants data with extreme z-values to NAs 
 
 df <- df %>% 
   mutate(dr_defer1 = if_else(abs(z_score1) >= 3, NA, dr_defer1),
@@ -211,17 +221,17 @@ df <- df %>%
 ```
 
 ```{r}
-# converting all the negative discount rates to NA
+# Converting all the negative discount rates to NA
 df <- df %>% 
   mutate(across(starts_with("dr_"), ~ if_else(. < 0, NA, .)))
 
-# only the relevant variables
+# Keeping only the relevant variables
 cfa_df <- df %>% 
   select(ResponseId, starts_with("dr_"))
 ```
 
-```{r}
-# function to check for outliers using boxplot
+```{r, warning=FALSE}
+# Function for visualizing outliers
 
 outlier_graph <- function(data, var){
   ggplot(data, aes(x = "", y = data[[var]])) +
@@ -232,17 +242,18 @@ outlier_graph <- function(data, var){
        y = "Discounting Rates")
 }
 
-outlier_graph(cfa_df, "dr_defer1")
+outlier_graph(df, "dr_defer2") # change the variable
 ```
 
 ## Assumptions check
 ```{r}
 # Checking for multicollinearity 
 lowerCor(df[,2:13], use = "complete.obs", show = TRUE) 
+```
+The following items have multicollinearity issues - expd3, expd4, exp6
 
-# few instances of multicollinearity involving items (expd3, expd4, exp6)
-library(apaTables)
-
+```{r, eval=FALSE}
+# Saving the APA correlation table
 cor_matrix <- cor(df[ ,2:13], use = "pairwise.complete.obs")
 
 apa.cor.table(
@@ -251,17 +262,12 @@ apa.cor.table(
   table.number = 1,
   show.conf.interval = FALSE
 )
-
 ```
+
+
 ## CFA Models
-
-Once the discount rate columns have been created and cleaned they can be supplied to CFA models in lavaan. Three that are of interest are:
-
-(1) A one-factor model with all 12 discount rate columns loading onto a single factor.
-
-### One Factor Model
 ```{r}
-# renaming the variables for easier process
+# Renaming the variables for easier process
 rename_custom <- function(name) {
   name <- sub("^dr_defer(\\d+)$", "def\\1", name)  
   name <- sub("^dr_expedite(\\d+)$", "exp\\1", name)
@@ -270,92 +276,187 @@ rename_custom <- function(name) {
 
 cfa_df <- cfa_df %>% 
   rename_with(rename_custom)
+
+# How many missing cells?
+sum(is.na(cfa_df)) # 593 NAs -> Use `FIML` Imputation
 ```
 
-```{r}
-# missing data?
-sum(is.na(cfa_df)) # 593 NAs
-
-# model specification
+### One Factor Model
+```{r, warning=FALSE}
+# Model specification
 of_model <- 'discount =~ def1 + def2 + def3 + def4 + def5 + def6 +
                          exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
 
-# fitting the model
+# Fitting the model
 of_model_fit <- cfa(of_model, data = cfa_df, missing = "fiml")
 
 summary(of_model_fit, fit.measures = TRUE, rsq = TRUE, standardized = TRUE)
 
 reliability(of_model_fit)
 ```
+
+#### Model Visualizations
 ```{r}
 # Plot for the one factor model
 semPlot::semPaths(of_model_fit, 
                   layout = "tree", style = "lisrel", what = "col", whatLabels = "stand")
 ```
+#### Checking Linearity Assumptions
 ```{r}
 # checking linearity assumptions for one factor model
-of_fs <- data.frame(lavPredict(of_model_fit, method = "regression"))
+tf_fs <- data.frame(lavPredict(tf_model_fit, method = "regression"))
 
-# Combine the data into one data frame
+# Reshaping the data
 plot_data <- cfa_df %>%
   select(def1:def6, exp1:exp6) %>%  # Select the relevant columns
   pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>% 
-  mutate(Discount = rep(of_fs$discount, each = 12))
+  mutate(Discount_Rate = rep(tf_fs$discount, each = 12))
 
 # Create the plot using ggplot2
-ggplot(plot_data, aes(x = Discount, y = Value)) +
-  geom_point(size = 0.5, color = "blue", alpha = 0.5) +  # Add scatter points
-  facet_wrap(~Variable, scales = "free_y") +  # Create one plot for each variable
+ggplot(plot_data, aes(x = Discount_Rate, y = Value)) +
+  geom_point(size = 0.5, color = "blue", alpha = 0.5) + 
+  facet_wrap(~Variable, scales = "free_y") +  
   labs(x = "Discount", y = "Value", title = "Facet Wrap of Discount vs Variables") +
   theme_minimal()
 ```
 
-
 ### Two Factor Model
 
-```{r}
+```{r, warning=FALSE}
+# Model Specification
 tf_model <- 'defer =~ def1 + def2 + def3 + def4 + def5 + def6
           expedite =~ exp1 + exp2 + exp3 + exp4 + exp5 + exp6'
 
+# Fitting the Model
 tf_model_fit <- cfa(tf_model, data = cfa_df, missing = "fiml")
 summary(tf_model_fit, rsq = TRUE, fit.measures = TRUE, standardized = TRUE)
 
+# Checking validity and reliability
 semTools::reliability(tf_model_fit)
-"Chi-square <- significant [not a good fit]
-CFI = 0.935 <- Almost a good fit
-RMSEA = 0.127 <- not a good fit"
 ```
+
+#### Model Visualization
 ```{r}
 # Plot for the two factor model
 semPlot::semPaths(tf_model_fit, 
                   layout = "tree", style = "lisrel", what = "col", whatLabels = "stand")
 ```
+#### Checking Linearity Assumptions
+```{r, warning=FALSE}
+# Checking linearity assumptions for two-factor model
+tf_fs <- data.frame(lavPredict(tf_model_fit, method = "regression"))
+
+# Reshaping the data
+plot_data <- cfa_df %>%
+  select(def1:def6, exp1:exp6) %>%  # Select the relevant observed variables
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  mutate(
+    defer = rep(tf_fs$defer, each = 12),
+    expedite = rep(tf_fs$expedite, each = 12)
+  )
+
+# Create the plot for Factor 1
+plot_data_def <- plot_data %>% 
+  filter(Variable %in% c("def1", "def2", "def3", "def4", "def5", "def6"))
+
+ggplot(plot_data_def, aes(x = defer, y = Value)) +
+  geom_point(size = 0.5, color = "blue", alpha = 0.5) +
+  facet_wrap(~Variable, scales = "free_y") +
+  labs(x = "Defer Score", y = "Value", title = "Facet Wrap of Factor 1 vs Variables") +
+  theme_minimal()
+
+# Create the plot for Factor 2
+plot_data_exp <- plot_data %>% 
+  filter(Variable %in% c("exp1", "exp2", "exp3", "exp4", "exp5", "exp6"))
+
+ggplot(plot_data_exp, aes(x = expedite, y = Value)) +
+  geom_point(size = 0.5, color = "red", alpha = 0.5) +
+  facet_wrap(~Variable, scales = "free_y") +
+  labs(x = "Expedite Score", y = "Value", title = "Facet Wrap of Factor 2 vs Variables") +
+  theme_minimal()
+```
 
 ### Four Factor Model
-(3) For both defer and expedited items, three of the provided rewards were small in magnitude (< $100) and three were larger in magnitude (>$800). A four-factor model could look at defer_small, defer_large, expedite_small, and expedite_large.
 
-```{r}
+```{r, warning=FALSE}
+# Model specification
 ff_model <- 'defer_small =~ def1 + def3 + def6
              defer_large =~ def2 + def4 + def5
              expedite_small =~ exp1 + exp3 + exp6
              expedite_large =~ exp2 + exp4 + exp5'
 
+# Fitting the model
 ff_model_fit <- cfa(ff_model, data = cfa_df, missing = "fiml")
-
 summary(ff_model_fit, fit.measures = TRUE, rsq = TRUE, standardized = TRUE)
 
+# Checking validity and reliability
 semTools::reliability(ff_model_fit)
-"Chi-square <- significant [not a good fit]
-CFI = 0.957 <- Good fit
-RMSEA = 0.109 <- not a good fit"
 ```
+
+#### Model Visualization
 ```{r}
 # Plot for the four factor model
 semPlot::semPaths(ff_model_fit, 
                   layout = "tree", style = "lisrel", what = "col", whatLabels = "stand")
 ```
+#### Checking Linearity Assumptions
+```{r, warning=FALSE}
+# Checking linearity assumptions for four-factor model
+ff_fs <- data.frame(lavPredict(ff_model_fit, method = "regression"))
 
-Lavaan likelihood ratio tests can then be performed to compare model fits of these nested models (as well as inspection of other global and local fit indices).
+# Reshaping the data
+plot_data <- cfa_df %>%
+  select(def1:def6, exp1:exp6) %>%  # Select the relevant observed variables
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  mutate(
+    defer_small = rep(ff_fs$defer_small, each = 12),
+    defer_large = rep(ff_fs$defer_large, each = 12),
+    exp_small = rep(ff_fs$expedite_small, each = 12),
+    exp_large = rep(ff_fs$expedite_large, each = 12),
+  )
+
+# Create the plot for Factor 1
+plot_data_def_s <- plot_data %>% 
+  filter(Variable %in% c("def1", "def3", "def6"))
+
+ggplot(plot_data_def_s, aes(x = defer_small, y = Value)) +
+  geom_point(size = 0.5, color = "lightblue", alpha = 0.5, nrow = 2) +
+  facet_wrap(~Variable, scales = "free_y") +
+  labs(x = "Defer Score", y = "Value", title = "Facet Wrap of Factor 1 vs Variables") +
+  theme_minimal()
+
+# Create the plot for Factor 2
+plot_data_def_l <- plot_data %>% 
+  filter(Variable %in% c("def2", "def4", "def5"))
+
+ggplot(plot_data_def_l, aes(x = defer_large, y = Value)) +
+  geom_point(size = 0.5, color = "blue", alpha = 0.5, nrow = 2) +
+  facet_wrap(~Variable, scales = "free_y") +
+  labs(x = "Defer Score", y = "Value", title = "Facet Wrap of Factor 1 vs Variables") +
+  theme_minimal()
+
+# Create the plot for Factor 3
+plot_data_exp_s <- plot_data %>% 
+  filter(Variable %in% c("exp1", "exp3", "exp6"))
+
+ggplot(plot_data_exp_s, aes(x = exp_small, y = Value)) +
+  geom_point(size = 0.5, color = "darkorange", alpha = 0.5) +
+  facet_wrap(~Variable, scales = "free_y", nrow = 2) +
+  labs(x = "Expedite Score", y = "Value", title = "Facet Wrap of Factor 2 vs Variables") +
+  theme_minimal()
+
+# Create the plot for Factor 4
+plot_data_exp_l <- plot_data %>% 
+  filter(Variable %in% c("exp2", "exp4", "exp5"))
+
+ggplot(plot_data_exp_l, aes(x = exp_large, y = Value)) +
+  geom_point(size = 0.5, color = "red", alpha = 0.5) +
+  facet_wrap(~Variable, scales = "free_y", nrow = 2) +
+  labs(x = "Expedite Score", y = "Value", title = "Facet Wrap of Factor 2 vs Variables") +
+  theme_minimal()
+```
+
+## Likelihood Ratio Test
 ```{r}
 # Comparing model one-factor & two-factor model
 lavTestLRT(of_model_fit, tf_model_fit)
