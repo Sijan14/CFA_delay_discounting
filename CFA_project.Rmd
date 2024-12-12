@@ -7,7 +7,7 @@ output:
   bookdown::html_document2:
     toc: true
     toc_depth: 4
-    theme: united
+    theme: dark
     number_sections: false
     toc_float:
       collapsed: yes
@@ -304,13 +304,13 @@ semPlot::semPaths(of_model_fit,
 #### Checking Linearity Assumptions
 ```{r}
 # checking linearity assumptions for one factor model
-tf_fs <- data.frame(lavPredict(tf_model_fit, method = "regression"))
+of_fs <- data.frame(lavPredict(of_model_fit, method = "regression"))
 
 # Reshaping the data
 plot_data <- cfa_df %>%
   select(def1:def6, exp1:exp6) %>%  # Select the relevant columns
   pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>% 
-  mutate(Discount_Rate = rep(tf_fs$discount, each = 12))
+  mutate(Discount_Rate = rep(of_fs$discount, each = 12))
 
 # Create the plot using ggplot2
 ggplot(plot_data, aes(x = Discount_Rate, y = Value)) +
